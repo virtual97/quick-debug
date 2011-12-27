@@ -27,7 +27,7 @@ function qqq($var, $dump = 0, $trace = 0)
     if (!isAjax() && !extension_loaded('xdebug') && $dump == 1) {
         $res = htmlspecialchars($res);
     }
-    echo (!isAjax() ? '<pre>' : '/*') . PHP_EOL, $res, (!isAjax() ? '</pre>' : '*/');
+    echo PHP_EOL . (!isAjax() ? '<pre>' : '/*'), $res, (!isAjax() ? '</pre>' : '*/');
 }
 
 /**
@@ -155,6 +155,29 @@ function qqqSql($sql, $echo = true)
     return $sql;
 }
 
+/**
+ * Calc mikro time
+ *
+ * @param bool $finish
+ * @param string $key
+ * @param bool $echo
+ * @return int
+ */
+function qqqMkTime($finish = false, $key = 'default', $echo = true)
+{
+    static $time;
+    if ($finish) {
+        $t = mktime() - $time[$key];
+        if ($echo) {
+            qqq("Key '$key': $t");
+        }
+        $time[$key] = mktime();
+        return $t;
+    } else {
+        $time[$key] = mktime();
+        return $time[$key];
+    }
+}
 
 
 /**
