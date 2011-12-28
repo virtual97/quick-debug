@@ -2,16 +2,19 @@
 /**
  * Class for generate PHPDoc @ method tags for DB fields
  */
-class Mage_Core_CodeController extends Mage_Core_Controller_Front_Action {
+class Mage_Core_CodeController extends Mage_Core_Controller_Front_Action
+{
+    const OUTPUT_HTML = 'html';
+    const OUTPUT_FILE = 'file';
 
     function indexAction()
     {
-        $classParam = $this->getRequest()->getParam('class');
-        $resourcePrefix = $this->getRequest()->getParam('resource', 'Resource_');
+        $classParam = $this->getRequest()->getParam('class'); //class name
+        $resourcePrefix = $this->getRequest()->getParam('resource', 'Resource_'); //resource prefix
+        $output = $this->getRequest()->getParam('output', self::OUTPUT_HTML); //file - write to file
 
         if (!strpos($classParam, '_Model_')) {
-            echo "$classParam is not a model.";
-            exit;
+            throw new Exception("$classParam is not a model.");
         }
         $file = realpath(dirname(__FILE__) . '/../../..') . '/' . str_replace('_', '/', $classParam) . '.php';
         /** @var $model Mage_Core_Model_Abstract */
@@ -85,7 +88,6 @@ class Mage_Core_CodeController extends Mage_Core_Controller_Front_Action {
 
             unset($method);
             foreach ($defaultMethodsNotExists as $k => $method) {
-                //m - method
                 if (strpos($line, $method)) {
                     unset($defaultMethodsNotExists[$k]);
                 }
@@ -110,12 +112,16 @@ class Mage_Core_CodeController extends Mage_Core_Controller_Front_Action {
             foreach ($defaultMethodsNotExists as $method) {
                 $class = str_replace($resourceName, '', $classParam);
                 if (strpos($method, 'Collection')) {
-                    $addMethods[] = $strPrefix . $class . $resourcePrefix .
+                    $methodToAdd = $strPrefix . $class . $resourcePrefix .
                             $resourceName . '_Collection ' . $method . '()';
                 } else {
-                    $addMethods[] = $strPrefix . $class . $resourcePrefix .
+                    $methodToAdd = $strPrefix . $class . $resourcePrefix .
                             $resourceName . ' ' . $method . '()';
                 }
+                if (self::OUTPUT_HTML == $output) {
+                    $methodToAdd = "_bb_$methodToAdd _bbc_";
+                }
+                $addMethods[] = $methodToAdd;
             }
         }
 
@@ -137,7 +143,11 @@ class Mage_Core_CodeController extends Mage_Core_Controller_Front_Action {
                         $methodTag2 = $prefix . $method['name'] . "({$method['type']} $$varName)";
                         $result .= ' ' . $methodTag2;
                     }
-                    $addMethods[] = $strPrefix . $result;
+                    $methodToAdd = $strPrefix . $result;
+                    if (self::OUTPUT_HTML == $output) {
+                        $methodToAdd = "_bb_$methodToAdd _bbc_";
+                    }
+                    $addMethods[] = $methodToAdd;
                 }
             }
         }
@@ -150,15 +160,28 @@ class Mage_Core_CodeController extends Mage_Core_Controller_Front_Action {
             $content[$methodIndex] = $content[$methodIndex] . "\n" . implode("\n", $addMethods);
             $content = implode("\n", $content);
 
-            echo '<pre>';
-            echo htmlspecialchars($content);
-            echo '</pre>';
-            return;
+            switch ($output) {
+                //write file
+                case self::OUTPUT_FILE:
+                    $fh = fopen($file, 'w') or die("can't open file");
+                    fwrite($fh, $content);
+                    fclose($fh);
+                    break;
 
-            //write file
-            $fh = fopen($file, 'w') or die("can't open file");
-            fwrite($fh, $content);
-            fclose($fh);
+                //generate html
+                case self::OUTPUT_HTML:
+                    $content = htmlspecialchars($content);
+                    $content = str_replace('_bb_', '<b><em>', $content);
+                    $content = str_replace('_bbc_', '</b></em>', $content);
+                    $content = str_replace("\n", '<br/>', $content);
+                    $content = str_replace(' ', '&nbsp;', $content);
+                    echo $content;
+                    break;
+
+                default:
+                    throw new Exception('Invalid output type');
+                    break;
+            }
         } else {
             echo 'No any methods to add.';
         }
