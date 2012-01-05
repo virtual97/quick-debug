@@ -20,7 +20,6 @@ class Mage_Core_CodeController extends Mage_Core_Controller_Front_Action
         /** @var $model Mage_Core_Model_Abstract */
         $model = new $classParam;
 
-
         $fields = $model->getResource()->getReadConnection()->describeTable($model->getResource()->getMainTable());
         unset($fields[$model->getIdFieldName()]);
         $content = '';
@@ -129,7 +128,7 @@ class Mage_Core_CodeController extends Mage_Core_Controller_Front_Action
         foreach ($methodFieldNames as $method) {
             foreach (array('get', 'set') as $prefix) {
                 if (!$method['exist_' . $prefix]) {
-                    $return = $prefix == 'get' ? $method['type'] : __CLASS__;
+                    $return = $prefix == 'get' ? $method['type'] : $classParam;
                     $methodTag1 = $prefix . $method['name'] . "()";
                     $result = $return . ' ' . $methodTag1;
                     if ($prefix == 'set') {
@@ -171,10 +170,11 @@ class Mage_Core_CodeController extends Mage_Core_Controller_Front_Action
                 //generate html
                 case self::OUTPUT_HTML:
                     $content = htmlspecialchars($content);
-                    $content = str_replace('_bb_', '<b><em>', $content);
-                    $content = str_replace('_bbc_', '</b></em>', $content);
+                    $content = str_replace('_bb_', '<b>', $content);
+                    $content = str_replace('_bbc_', '</b>', $content);
                     $content = str_replace("\n", '<br/>', $content);
                     $content = str_replace(' ', '&nbsp;', $content);
+                    $content = "<div style='font-family: \"Courier New\",Courier,monospace; font-size: 14px;'>$content</div>";
                     echo $content;
                     break;
 
