@@ -1,5 +1,7 @@
 <?php
 /**
+ * Dump function
+ *
  * @param mixed $var
  * @param int $dump
  * @param int $trace
@@ -31,6 +33,8 @@ function qqq($var, $dump = 0, $trace = 0)
 }
 
 /**
+ * Dump function with stopping script on the end
+ *
  * @param mixed $var
  * @param int $dump
  * @param int $trace
@@ -39,6 +43,22 @@ function qqq1($var, $dump = 0, $trace = 0)
 {
     qqq($var, $dump, $trace);
     exit;
+}
+
+/**
+ * Show exception
+ *
+ * @param Exception $e
+ * @param bool $exit
+ */
+function qqqE(Exception $e, $exit = true)
+{
+    qqq($e->getMessage());
+    qqq($e->getTraceAsString());
+
+    if ($exit) {
+        exit();
+    }
 }
 
 /**
@@ -95,7 +115,7 @@ function qqqTable($value, $echo = true)
     }
     $str = '<table border="1">';
     $cnt = 0;
-    foreach ($value as $i => $row) {
+    foreach ($value as $row) {
         $str .= "<tr>";
         if (is_array($row) || is_object($row) || $row instanceof Varien_Object && $row = $row->getData()) {
             if ($cnt == 0 && ++$cnt) {
@@ -107,7 +127,7 @@ function qqqTable($value, $echo = true)
                 $str .= "</tr>";
                 $str .= "<tr>";
             }
-            foreach ($row as $ii => $rrow) {
+            foreach ($row as $rrow) {
                 $str .= "<td>";
                 $str .= ($rrow ? $rrow : "&nbsp;");
                 $str .= "</td>";
@@ -127,7 +147,7 @@ function qqqTable($value, $echo = true)
 }
 
 /**
- * Dump SQL with formater
+ * Dump SQL with formatter
  *
  * @param string $sql          SQL-request
  * @param bool $echo
@@ -156,7 +176,7 @@ function qqqSql($sql, $echo = true)
 }
 
 /**
- * Calc mikro time
+ * Calc micro time
  *
  * @param bool $finish
  * @param string $key
@@ -167,14 +187,15 @@ function qqqMkTime($finish = false, $key = 'default', $echo = true)
 {
     static $time;
     if ($finish) {
-        $t = mktime() - $time[$key];
+        list($mkTime, $stamp) = explode(' ', microtime());
+        $t = $stamp + $mkTime - $time[$key];
         if ($echo) {
             qqq("Key '$key': $t");
         }
-        $time[$key] = mktime();
         return $t;
     } else {
-        $time[$key] = mktime();
+        list($mkTime, $stamp) = explode(' ', microtime());
+        $time[$key] = $stamp + $mkTime;
         return $time[$key];
     }
 }

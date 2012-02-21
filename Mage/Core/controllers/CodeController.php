@@ -1,12 +1,28 @@
 <?php
 /**
- * Class for generate PHPDoc @ method tags for DB fields
+ * Class for generate help code
  */
 class Mage_Core_CodeController extends Mage_Core_Controller_Front_Action
 {
+    /**#@+
+     * Output types
+     */
     const OUTPUT_HTML = 'html';
     const OUTPUT_FILE = 'file';
+    /**#@-*/
 
+    /**
+     * Generator PHPDoc @ method tags in a model by DB fields
+     *
+     * Params:
+     * "class" - valid model class name (ex.: "Mage_Core_Model_Example")
+     * "output" -
+     *      "html" - output as html (default)
+     *      "file" - write to file on the server
+     * "resource" - resource prefix (by default "Resource_", but can be "Mysql4_" or other)
+     *
+     * @throws Exception
+     */
     function indexAction()
     {
         $classParam = $this->getRequest()->getParam('class'); //class name
@@ -20,7 +36,12 @@ class Mage_Core_CodeController extends Mage_Core_Controller_Front_Action
         /** @var $model Mage_Core_Model_Abstract */
         $model = new $classParam;
 
-        $fields = $model->getResource()->getReadConnection()->describeTable($model->getResource()->getMainTable());
+        $resource = $model->getResource();
+        if (!is_object($resource)) {
+            throw new Exception('Model does not have a resource.');
+        }
+
+        $fields = $resource->getReadConnection()->describeTable($model->getResource()->getMainTable());
         unset($fields[$model->getIdFieldName()]);
         $content = '';
         if (false === ($fh = fopen($file, 'r'))) {
@@ -169,12 +190,7 @@ class Mage_Core_CodeController extends Mage_Core_Controller_Front_Action
 
                 //generate html
                 case self::OUTPUT_HTML:
-                    $content = htmlspecialchars($content);
-                    $content = str_replace('_bb_', '<b>', $content);
-                    $content = str_replace('_bbc_', '</b>', $content);
-                    $content = str_replace("\n", '<br/>', $content);
-                    $content = str_replace(' ', '&nbsp;', $content);
-                    $content = "<div style='font-family: \"Courier New\",Courier,monospace; font-size: 14px;'>$content</div>";
+                    $content = $this->_prepareContent($content);
                     echo $content;
                     break;
 
@@ -185,5 +201,53 @@ class Mage_Core_CodeController extends Mage_Core_Controller_Front_Action
         } else {
             echo 'No any methods to add.';
         }
+    }
+
+    /**
+     * Modules enabler generator action for enable all or desabled modules
+     *
+     * For use enable only disabled modules use parameter all=0
+     * Make file /app/etc/modules/ZEnabler.xml and paste generated code in it.
+     * File must be in the end by alphabetic sort
+     */
+    public function moduleEnablerAction()
+    {
+        $modules = (array) Mage::getConfig()->getNode('modules')->children();
+        $xml = '<?xml version="1.0"?>' . PHP_EOL;
+        $xml .= '<config>' . PHP_EOL;
+        $xml .= '<modules>' . PHP_EOL;
+        $all = $this->getRequest()->getParam('all', 1);
+        $cnt = 0;
+        foreach ($modules as $name => $node) {
+            if ($all == 1 || $node->active == 'false') {
+                $cnt++;
+                $xml .= str_repeat(' ', 4) . "<$name><active>true</active></$name>" . PHP_EOL;
+            }
+        }
+        if (!$cnt) {
+            echo 'No any modules to enable.';
+            return;
+        }
+        $xml .= '</modules>' . PHP_EOL;
+        $xml .= '</config>' . PHP_EOL;
+        $xml = $this->_prepareContent($xml);
+        echo $xml;
+    }
+
+    /**
+     * Prepare content to echo
+     *
+     * @param string $content
+     * @return string   Return prepared content
+     */
+    protected function _prepareContent($content)
+    {
+        $content = htmlspecialchars($content);
+        $content = str_replace('_bb_', '<b>', $content);
+        $content = str_replace('_bbc_', '</b>', $content);
+        $content = str_replace("\n", '<br/>', $content);
+        $content = str_replace(' ', '&nbsp;', $content);
+        $content = "<div style='font-family: \"Courier New\",Courier,monospace; font-size: 14px;'>$content</div>";
+        return $content;
     }
 }
