@@ -29,7 +29,11 @@ function qqq($var, $dump = 0, $trace = 0)
     if (!isAjax() && !extension_loaded('xdebug') && $dump == 1) {
         $res = htmlspecialchars($res);
     }
-    echo PHP_EOL . (!isAjax() ? '<pre>' : '/*'), $res, (!isAjax() ? '</pre>' : '*/');
+    if (!isset($_SERVER['argv']) || !$_SERVER['argv']) {
+        echo PHP_EOL . (!isAjax() ? '<pre>' : '/*'), $res, (!isAjax() ? '</pre>' : '*/');
+    } else {
+        echo PHP_EOL, '  ', $res;
+    }
 }
 
 /**
@@ -43,6 +47,21 @@ function qqq1($var, $dump = 0, $trace = 0)
 {
     qqq($var, $dump, $trace);
     exit;
+}
+
+/**
+ * Dump HTML
+ *
+ * @param mixed $var
+ * @param int $dump
+ * @param int $trace
+ */
+function qqqHtml($var, $dump = 0, $trace = 0)
+{
+    if (is_string($var)) {
+        $var = str_replace('><', ">\n<", $var);
+    }
+    qqq($var, $dump, $trace);
 }
 
 /**
@@ -207,7 +226,7 @@ function qqqMkTime($finish = false, $key = 'default', $echo = true)
  * @param string $connectionName
  * @return mixed|Zend_Db_Profiler
  */
-function profiler($connectionName = 'write')
+function profiler($connectionName = 'core_read')
 {
     if (false == ($profiler = Mage::registry('profiler'))) {
         /** @var $resource Mage_Core_Model_Resource */
@@ -232,11 +251,16 @@ function profilerQueries($echo = false)
     $profiler = profiler();
     $data = array();
     /** @var $query Zend_Db_Profiler_Query */
-    foreach ($profiler->getQueryProfiles() as $query) {
-        $data[] = array(
-            'query'  => $query->getQuery(),
-            'params' => $query->getQueryParams(),
-        );
+    $queryProfiles = $profiler->getQueryProfiles();
+    if (false === $queryProfiles) {
+        $data = 'Queries is FALSE.';
+    } else {
+        foreach ($queryProfiles as $query) {
+            $data[] = array(
+                'query'  => $query->getQuery(),
+                'params' => $query->getQueryParams(),
+            );
+        }
     }
     if ($echo) {
         qqq($data);
