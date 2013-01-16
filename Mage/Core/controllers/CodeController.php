@@ -23,26 +23,114 @@ class Mage_Core_CodeController extends Mage_Core_Controller_Front_Action
      *
      * @throws Exception
      */
-    function indexAction()
+    function docAction()
+    {
+        $classParam = $this->_getClassParam();
+        $file = $this->_getModelFile($classParam);
+        $methodFieldNames = $this->_getMethodFieldNames($classParam);
+        $content = $this->_getFileContent($file);
+
+        list($methodIndex, $defaultMethodsNotExists) = $this->_getDefaultMethodsNotExist($content, $methodFieldNames);
+
+        $addMethods = array_merge(
+            $this->_getResourceMethods($defaultMethodsNotExists),
+            $this->_getParamMethods($methodFieldNames)
+        );
+
+        if ($addMethods) {
+            $content[$methodIndex] = $content[$methodIndex] . "\n" . implode("\n", $addMethods);
+            $content = implode("\n", $content);
+            $this->_makeOutput($file, $content);
+        } else {
+            echo 'No any methods to add.';
+        }
+    }
+
+    /**
+     * @param $content
+     * @param $methodFieldNames
+     *
+     * @return array
+     */
+    protected function _getDefaultMethodsNotExist($content, &$methodFieldNames)
+    {
+        list($methodIndex, $classIndex) = $this->_getIndexes($content);
+        $defaultMethodsNotExists = $this->_getDefaultMethods();
+        foreach ($content as $i => $line) {
+            if ($methodIndex < $i && $i > $classIndex) {
+                continue;
+            }
+
+            if ($classIndex == $i) {
+                break;
+            }
+
+            if (strpos($line, '@method')) {
+                //save last method line
+                $methodIndex = $i;
+            }
+
+
+            foreach ($defaultMethodsNotExists as $k => $method) {
+                if (strpos($line, $method)) {
+                    unset($defaultMethodsNotExists[$k]);
+                }
+            }
+            unset($method);
+
+
+            foreach ($methodFieldNames as &$method) {
+                foreach (array('get', 'set') as $prefix) {
+                    if (false !== strpos($line, $prefix . $method['name'])) {
+                        $method['exist_' . $prefix] = true;
+                    }
+                }
+            }
+            unset($method);
+        }
+        if (!$methodIndex) {
+            $methodIndex = $classIndex - 2;
+        }
+
+        return array($methodIndex, $defaultMethodsNotExists);
+    }
+
+    /**
+     * @return array
+     */
+    protected function _getDefaultMethods()
+    {
+        return array(
+            'getCollection',
+            'getResourceCollection',
+            'getResource',
+            '_getResource',
+        );
+    }
+
+    /**
+     * @return mixed
+     * @throws Exception
+     */
+    protected function _getClassParam()
     {
         $classParam = $this->getRequest()->getParam('class'); //class name
-        $resourcePrefix = $this->getRequest()->getParam('resource', 'Resource_'); //resource prefix
-        $output = $this->getRequest()->getParam('output', self::OUTPUT_HTML); //file - write to file
 
         if (!strpos($classParam, '_Model_')) {
             throw new Exception("$classParam is not a model.");
         }
-        $file = realpath(dirname(__FILE__) . '/../../..') . '/' . str_replace('_', '/', $classParam) . '.php';
-        /** @var $model Mage_Core_Model_Abstract */
-        $model = new $classParam;
 
-        $resource = $model->getResource();
-        if (!is_object($resource)) {
-            throw new Exception('Model does not have a resource.');
-        }
+        return $classParam;
+    }
 
-        $fields = $resource->getReadConnection()->describeTable($model->getResource()->getMainTable());
-        unset($fields[$model->getIdFieldName()]);
+    /**
+     * @param $file
+     *
+     * @return array
+     * @throws Exception
+     */
+    protected function _getFileContent($file)
+    {
         $content = '';
         if (false === ($fh = fopen($file, 'r'))) {
             throw new Exception('Cannot open ' . $file);
@@ -54,8 +142,18 @@ class Mage_Core_CodeController extends Mage_Core_Controller_Front_Action
         fclose($fh);
 
         $content = explode("\n", $content);
-        $classIndex =
-        $methodIndex = null;
+
+        return $content;
+    }
+
+    /**
+     * @param $content
+     *
+     * @return array
+     */
+    protected function _getIndexes($content)
+    {
+        $classIndex = $methodIndex = null;
         foreach ($content as $i => $line) {
             if (0 === strpos($line, ' * @method') && null === $methodIndex) {
                 $methodIndex = $i;
@@ -65,12 +163,38 @@ class Mage_Core_CodeController extends Mage_Core_Controller_Front_Action
                 break;
             }
         }
-        $defaultMethodsNotExists = array(
-            'getCollection',
-            'getResourceCollection',
-            'getResource',
-            '_getResource',
-        );
+
+        return array($methodIndex, $classIndex);
+    }
+
+    /**
+     * @param $classParam
+     *
+     * @return string
+     */
+    protected function _getModelFile($classParam)
+    {
+        return realpath(dirname(__FILE__) . '/../../..') . '/' . str_replace('_', '/', $classParam) . '.php';
+    }
+
+    /**
+     * @param $classParam
+     *
+     * @return mixed
+     * @throws Exception
+     */
+    protected function _getMethodFieldNames($classParam)
+    {
+        /** @var $model Mage_Core_Model_Abstract */
+        $model = new $classParam;
+
+        $resource = $model->getResource();
+        if (!is_object($resource)) {
+            throw new Exception('Model does not have a resource.');
+        }
+
+        $fields = $resource->getReadConnection()->describeTable($model->getResource()->getMainTable());
+        unset($fields[$model->getIdFieldName()]);
 
         $methodFieldNames = array();
         foreach ($fields as $f) {
@@ -91,78 +215,74 @@ class Mage_Core_CodeController extends Mage_Core_Controller_Front_Action
                 'exist_set' => false);
         }
 
+        return $methodFieldNames;
+    }
 
-        foreach ($content as $i => $line) {
-            if ($methodIndex < $i && $i > $classIndex) {
-                continue;
-            }
-
-            if ($classIndex == $i) {
+    /**
+     * @param $file
+     * @param $content
+     * @throws Exception
+     */
+    protected function _makeOutput($file, $content)
+    {
+        $output = $this->_getOutputType(); //file - write to file
+        switch ($output) {
+            //write file
+            case self::OUTPUT_FILE:
+                $fh = fopen($file, 'w') or die("can't open file");
+                fwrite($fh, $content);
+                fclose($fh);
                 break;
-            }
 
-            if (strpos($line, '@method')) {
-                //save last method line
-                $methodIndex = $i;
-            }
+            //generate html
+            case self::OUTPUT_HTML:
+                $content = $this->_prepareContent($content);
+                echo $content;
+                break;
 
-            unset($method);
-            foreach ($defaultMethodsNotExists as $k => $method) {
-                if (strpos($line, $method)) {
-                    unset($defaultMethodsNotExists[$k]);
-                }
-            }
-
-            unset($method);
-            foreach ($methodFieldNames as &$method) {
-                foreach (array('get', 'set') as $prefix) {
-                    $result = (bool) strpos($line, $prefix . $method['name']);
-                    if ($result) {
-                        $method['exist_' . $prefix] = $result;
-                    }
-                }
-            }
+            default:
+                throw new Exception('Invalid output type');
+                break;
         }
+    }
 
-        $strPrefix = ' * @method ';
+    /**
+     * @return mixed
+     */
+    protected function _getOutputType()
+    {
+        return $this->getRequest()->getParam('output', self::OUTPUT_HTML);
+    }
+
+    /**
+     * @param $methodFieldNames
+     * @return array
+     */
+    protected function _getParamMethods($methodFieldNames)
+    {
+        $output = $this->_getOutputType();
+        $classParam = $this->getRequest()->getParam('class');
         $addMethods = array();
-        list(, $resourceName) = explode('_Model_', $classParam);
-        if ($defaultMethodsNotExists) {
-            unset($method);
-            foreach ($defaultMethodsNotExists as $method) {
-                $class = str_replace($resourceName, '', $classParam);
-                if (strpos($method, 'Collection')) {
-                    $methodToAdd = $strPrefix . $class . $resourcePrefix .
-                            $resourceName . '_Collection ' . $method . '()';
-                } else {
-                    $methodToAdd = $strPrefix . $class . $resourcePrefix .
-                            $resourceName . ' ' . $method . '()';
-                }
-                if (self::OUTPUT_HTML == $output) {
-                    $methodToAdd = "_bb_$methodToAdd _bbc_";
-                }
-                $addMethods[] = $methodToAdd;
-            }
-        }
-
-        unset($method);
+        $strPrefix = ' * @method ';
         foreach ($methodFieldNames as $method) {
             foreach (array('get', 'set') as $prefix) {
                 if (!$method['exist_' . $prefix]) {
-                    $return = $prefix == 'get' ? $method['type'] : $classParam;
-                    $methodTag1 = $prefix . $method['name'] . "()";
-                    $result = $return . ' ' . $methodTag1;
+                    $return     = $prefix == 'get' ? $method['type'] : $classParam;
+                    $methodTag1 = $prefix . $method['name'] . '(%s)';
+                    $result     = $return . ' ' . $methodTag1;
                     if ($prefix == 'set') {
                         if (0 === strpos($method['name'], 'is_')) {
-                            $varName = 'flag';
+                            $varName        = 'flag';
                             $method['type'] = 'bool|int';
                         } else {
-                            $varName = $method['name'];
+                            $varName    = $method['name'];
                             $varName[0] = strtolower($varName[0]);
                         }
-                        $methodTag2 = $prefix . $method['name'] . "({$method['type']} $$varName)";
-                        $result .= ' ' . $methodTag2;
+                        $param  = "{$method['type']} $$varName";
+                    } else {
+                        $param = '';
                     }
+                    $result = sprintf($result, $param);
                     $methodToAdd = $strPrefix . $result;
                     if (self::OUTPUT_HTML == $output) {
                         $methodToAdd = "_bb_$methodToAdd _bbc_";
@@ -172,35 +292,47 @@ class Mage_Core_CodeController extends Mage_Core_Controller_Front_Action
             }
         }
 
-        if ($addMethods) {
-            if (!$methodIndex) {
-                $methodIndex = $classIndex - 2; //back with skip "*/"
+        return $addMethods;
+    }
+
+    /**
+     * @param $defaultMethodsNotExists
+     * @return array
+     */
+    protected function _getResourceMethods($defaultMethodsNotExists)
+    {
+        $resourcePrefix = $this->getRequest()->getParam('resource', 'Resource_'); //resource prefix
+        $output = $this->_getOutputType();
+        $classParam = $this->getRequest()->getParam('class');
+        $strPrefix = ' * @method ';
+        $addMethods = array();
+        list(, $resourceName) = explode('_Model_', $classParam);
+        if ($defaultMethodsNotExists) {
+            unset($method);
+            foreach ($defaultMethodsNotExists as $method) {
+                $module = str_replace($resourceName, '', $classParam);
+                $methodToAdd = $strPrefix;
+                if (strpos($method, 'Collection')) {
+                    $className = $module . $resourcePrefix . $resourceName . '_Collection';
+                    if (!@class_exists($className)) {
+                        continue;
+                    }
+                    $methodToAdd .= $className . ' ' . $method . '()';
+                } else {
+                    $className = $module . $resourcePrefix . $resourceName;
+                    if (!@class_exists($className)) {
+                        continue;
+                    }
+                    $methodToAdd .= $className . ' ' . $method . '()';
+                }
+                if (self::OUTPUT_HTML == $output) {
+                    $methodToAdd = "_bb_$methodToAdd _bbc_";
+                }
+                $addMethods[] = $methodToAdd;
             }
-
-            $content[$methodIndex] = $content[$methodIndex] . "\n" . implode("\n", $addMethods);
-            $content = implode("\n", $content);
-
-            switch ($output) {
-                //write file
-                case self::OUTPUT_FILE:
-                    $fh = fopen($file, 'w') or die("can't open file");
-                    fwrite($fh, $content);
-                    fclose($fh);
-                    break;
-
-                //generate html
-                case self::OUTPUT_HTML:
-                    $content = $this->_prepareContent($content);
-                    echo $content;
-                    break;
-
-                default:
-                    throw new Exception('Invalid output type');
-                    break;
-            }
-        } else {
-            echo 'No any methods to add.';
         }
+
+        return $addMethods;
     }
 
     /**
@@ -216,7 +348,7 @@ class Mage_Core_CodeController extends Mage_Core_Controller_Front_Action
         $xml = '<?xml version="1.0"?>' . PHP_EOL;
         $xml .= '<config>' . PHP_EOL;
         $xml .= '<modules>' . PHP_EOL;
-        $all = $this->getRequest()->getParam('all', 1);
+        $all = $this->getRequest()->getParam('all', 0);
         $cnt = 0;
         foreach ($modules as $name => $node) {
             if ($all == 1 || $node->active == 'false') {
