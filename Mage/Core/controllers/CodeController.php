@@ -171,10 +171,22 @@ class Mage_Core_CodeController extends Mage_Core_Controller_Front_Action
      * @param $classParam
      *
      * @return string
+     * @throws Exception
      */
     protected function _getModelFile($classParam)
     {
-        return realpath(dirname(__FILE__) . '/../../..') . '/' . str_replace('_', '/', $classParam) . '.php';
+        $file = realpath(dirname(__FILE__) . '/../../..') . '/' . str_replace('_', '/', $classParam) . '.php';
+        $file = str_replace('\\', '/', $file);
+        if (!file_exists($file)) {
+            $file = str_replace('/core/', '/community/', $file);
+            if (!file_exists($file)) {
+                $file = str_replace('/community/', '/local/', $file);
+                if (!file_exists($file)) {
+                    throw new Exception("PHP file for class '$classParam' not found.");
+                }
+            }
+        }
+        return $file;
     }
 
     /**
@@ -278,7 +290,7 @@ class Mage_Core_CodeController extends Mage_Core_Controller_Front_Action
                             $varName    = $method['name'];
                             $varName[0] = strtolower($varName[0]);
                         }
-                        $param  = "{$method['type']} $$varName";
+                        $param  = "{$method['type']} \$$varName";
                     } else {
                         $param = '';
                     }
@@ -301,37 +313,37 @@ class Mage_Core_CodeController extends Mage_Core_Controller_Front_Action
      */
     protected function _getResourceMethods($defaultMethodsNotExists)
     {
+        if (!$defaultMethodsNotExists) {
+            return array();
+        }
         $resourcePrefix = $this->getRequest()->getParam('resource', 'Resource_'); //resource prefix
         $output = $this->_getOutputType();
         $classParam = $this->getRequest()->getParam('class');
         $strPrefix = ' * @method ';
+        list($module, $resourceName) = explode('_Model_', $classParam);
+        $modelPrefix = $module . '_Model_';
+        unset($method);
         $addMethods = array();
-        list(, $resourceName) = explode('_Model_', $classParam);
-        if ($defaultMethodsNotExists) {
-            unset($method);
-            foreach ($defaultMethodsNotExists as $method) {
-                $module = str_replace($resourceName, '', $classParam);
-                $methodToAdd = $strPrefix;
-                if (strpos($method, 'Collection')) {
-                    $className = $module . $resourcePrefix . $resourceName . '_Collection';
-                    if (!@class_exists($className)) {
-                        continue;
-                    }
-                    $methodToAdd .= $className . ' ' . $method . '()';
-                } else {
-                    $className = $module . $resourcePrefix . $resourceName;
-                    if (!@class_exists($className)) {
-                        continue;
-                    }
-                    $methodToAdd .= $className . ' ' . $method . '()';
+        foreach ($defaultMethodsNotExists as $method) {
+            $methodToAdd = $strPrefix;
+            if (strpos($method, 'Collection')) {
+                $className = $modelPrefix . $resourcePrefix . $resourceName . '_Collection';
+                if (!@class_exists($className)) {
+                    continue;
                 }
-                if (self::OUTPUT_HTML == $output) {
-                    $methodToAdd = "_bb_$methodToAdd _bbc_";
+                $methodToAdd .= $className . ' ' . $method . '()';
+            } else {
+                $className = $modelPrefix . $resourcePrefix . $resourceName;
+                if (!@class_exists($className)) {
+                    continue;
                 }
-                $addMethods[] = $methodToAdd;
+                $methodToAdd .= $className . ' ' . $method . '()';
             }
+            if (self::OUTPUT_HTML == $output) {
+                $methodToAdd = "_bb_$methodToAdd _bbc_";
+            }
+            $addMethods[] = $methodToAdd;
         }
-
         return $addMethods;
     }
 
