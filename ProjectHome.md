@@ -1,0 +1,1 @@
+Quick Debug Function on PHP
