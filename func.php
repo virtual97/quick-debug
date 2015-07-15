@@ -46,7 +46,7 @@ function qqq($var, $dump = 0, $trace = 0)
 function qqq1($var, $dump = 0, $trace = 0)
 {
     qqq($var, $dump, $trace);
-    exit;
+    exit(1);
 }
 
 /**
@@ -76,7 +76,7 @@ function qqqE(Exception $e, $exit = true)
     qqq($e->getTraceAsString());
 
     if ($exit) {
-        exit();
+        exit(1);
     }
 }
 
