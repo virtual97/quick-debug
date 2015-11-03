@@ -2,8 +2,8 @@
 Automatically exported from http://code.google.com/p/quick-debug
 
 
-### Describe Magento model magic method in PHPDoc block
-There is a controller to generate Magento model magic method with tag @method in PHPDoc block.
+### Describe Magento model magic methods in PHPDoc block
+There is a controller to generate Magento model magic methods with tag @method in PHPDoc block.
 #### Installation
 Copy file `Mage/Core/controllers/CodeController.php` to `your-magento/app/code/core/` with the same path.
 
